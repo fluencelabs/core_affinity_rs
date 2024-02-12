@@ -222,6 +222,41 @@ mod linux {
 
             assert!(is_equal);
         }
+
+        #[test]
+        fn test_linux_set_mask_for_current() {
+            let ids = get_core_ids().unwrap();
+
+            assert!(ids.len() > 2);
+
+            let res = set_mask_for_current(&ids[0..2]);
+            assert_eq!(res, true);
+
+            // Ensure that the system pinned the current thread
+            // to the specified core.
+            let mut core_mask = new_cpu_set();
+            unsafe { CPU_SET(ids[0].id, &mut core_mask) };
+
+            let new_mask = get_affinity_mask().unwrap();
+
+            let mut is_equal = true;
+
+            for i in 0..CPU_SETSIZE as usize {
+                let is_set1 = unsafe {
+                    CPU_ISSET(i, &core_mask)
+                };
+                let is_set2 = unsafe {
+                    CPU_ISSET(i, &new_mask)
+                };
+
+                if is_set1 != is_set2 {
+                    is_equal = false;
+                }
+            }
+
+            assert!(is_equal);
+        }
+
     }
 }
 
