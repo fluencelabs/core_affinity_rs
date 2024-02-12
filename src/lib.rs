@@ -311,9 +311,9 @@ mod windows {
     }
 
     fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
-        let mut mask: u64 = 1;
+        let mut mask: u64 = 0;
         for core in core_ids {
-            mask = mask << core.id
+            mask |= 1 << core.id
         }
         // Set core affinity for current thread.
         let res = unsafe { SetThreadAffinityMask(GetCurrentThread(), mask as DWORD_PTR) };
