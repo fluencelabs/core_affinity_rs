@@ -270,10 +270,17 @@ fn set_for_current_helper(core_id: CoreId) -> bool {
 }
 
 #[cfg(target_os = "windows")]
+#[inline]
+fn set_mask_for_current_helper(core_ids: &[CoreId]) -> bool {
+    windows::set_mask_for_current(core_ids)
+}
+
+#[cfg(target_os = "windows")]
 extern crate winapi;
 
 #[cfg(target_os = "windows")]
 mod windows {
+    use std::slice;
     use winapi::shared::basetsd::{DWORD_PTR, PDWORD_PTR};
     use winapi::um::processthreadsapi::{GetCurrentProcess, GetCurrentThread};
     use winapi::um::winbase::{GetProcessAffinityMask, SetThreadAffinityMask};
@@ -300,9 +307,14 @@ mod windows {
     }
 
     pub fn set_for_current(core_id: CoreId) -> bool {
-        // Convert `CoreId` back into mask.
-        let mask: u64 = 1 << core_id.id;
+        set_mask_for_current(slice::from_ref(&core_id))
+    }
 
+    fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
+        let mut mask: u64 = 1;
+        for core in core_ids {
+            mask = mask << core.id
+        }
         // Set core affinity for current thread.
         let res = unsafe { SetThreadAffinityMask(GetCurrentThread(), mask as DWORD_PTR) };
         res != 0
@@ -355,6 +367,15 @@ mod windows {
             assert!(ids.len() > 0);
 
             assert_ne!(set_for_current(ids[0]), 0);
+        }
+
+        #[test]
+        fn test_windows_set_mask_for_current() {
+            let ids = get_core_ids().unwrap();
+
+            assert!(ids.len() > 2);
+
+            assert_ne!(set_mask_for_current(ids[0..2]), 0);
         }
     }
 }
@@ -683,7 +704,12 @@ fn set_for_current_helper(_core_id: CoreId) -> bool {
     false
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "freebsd")))]
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "windows",
+    target_os = "freebsd"
+)))]
 #[inline]
 fn set_mask_for_current_helper(_core_ids: &[CoreId]) -> bool {
     false
