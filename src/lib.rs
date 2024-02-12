@@ -236,6 +236,7 @@ mod linux {
             // to the specified core.
             let mut core_mask = new_cpu_set();
             unsafe { CPU_SET(ids[0].id, &mut core_mask) };
+            unsafe { CPU_SET(ids[1].id, &mut core_mask) };
 
             let new_mask = get_affinity_mask().unwrap();
 
