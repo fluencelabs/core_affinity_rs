@@ -567,8 +567,8 @@ mod freebsd {
     #[cfg(test)]
     mod tests {
         use libc::{CPU_ISSET, CPU_SET, CPU_SETSIZE};
-        use num_cpus;
         use linux::{get_core_ids, set_mask_for_current};
+        use num_cpus;
 
         use super::*;
 
