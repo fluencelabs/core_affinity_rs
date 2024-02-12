@@ -57,11 +57,11 @@ pub fn set_for_current(core_id: CoreId) -> bool {
 }
 
 /// This function tries to pin the current
-/// thread to the specified core.
+/// thread to the specified cores.
 ///
 /// # Arguments
 ///
-/// * core_id - ID of the core to pin
+/// * core_ids - the set of IDs to pin
 pub fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
     set_mask_for_current_helper(core_ids)
 }
