@@ -511,7 +511,7 @@ mod freebsd {
         }
     }
 
-    pub fn set_mask_for_current(core_ids: &CoreId) -> bool {
+    pub fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
         let mut set = new_cpu_set();
 
         for id in core_ids {
