@@ -29,10 +29,10 @@
 //! ```
 
 #[cfg(any(
-    target_os = "android",
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "freebsd"
+target_os = "android",
+target_os = "linux",
+target_os = "macos",
+target_os = "freebsd"
 ))]
 extern crate libc;
 
@@ -56,12 +56,24 @@ pub fn set_for_current(core_id: CoreId) -> bool {
     set_for_current_helper(core_id)
 }
 
+
+/// This function tries to pin the current
+/// thread to the specified core.
+///
+/// # Arguments
+///
+/// * core_id - ID of the core to pin
+pub fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
+    set_mask_for_current_helper(core_ids)
+}
+
 /// This represents a CPU core.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoreId {
     pub id: usize,
 }
+
 
 // Linux Section
 
@@ -77,9 +89,17 @@ fn set_for_current_helper(core_id: CoreId) -> bool {
     linux::set_for_current(core_id)
 }
 
+
+#[cfg(any(target_os = "android", target_os = "linux"))]
+#[inline]
+fn set_mask_for_current_helper(core_ids: &[CoreId]) -> bool {
+    linux::set_mask_for_current(core_ids)
+}
+
+
 #[cfg(any(target_os = "android", target_os = "linux"))]
 mod linux {
-    use std::mem;
+    use std::{mem, slice};
 
     use libc::{CPU_ISSET, CPU_SET, CPU_SETSIZE, cpu_set_t, sched_getaffinity, sched_setaffinity};
 
@@ -91,23 +111,24 @@ mod linux {
 
             for i in 0..CPU_SETSIZE as usize {
                 if unsafe { CPU_ISSET(i, &full_set) } {
-                    core_ids.push(CoreId{ id: i });
+                    core_ids.push(CoreId { id: i });
                 }
             }
 
             Some(core_ids)
-        }
-        else {
+        } else {
             None
         }
     }
 
-    pub fn set_for_current(core_id: CoreId) -> bool {
+    pub fn set_mask_for_current(core_ids: &[CoreId]) -> bool {
         // Turn `core_id` into a `libc::cpu_set_t` with only
         // one core active.
         let mut set = new_cpu_set();
 
-        unsafe { CPU_SET(core_id.id, &mut set) };
+        for id in core_ids {
+            unsafe { CPU_SET(id.id, &mut set) }
+        };
 
         // Set the current thread's core affinity.
         let res = unsafe {
@@ -116,6 +137,11 @@ mod linux {
                               &set)
         };
         res == 0
+    }
+
+
+    pub fn set_for_current(core_id: CoreId) -> bool {
+        set_mask_for_current(slice::from_ref(&core_id))
     }
 
     fn get_affinity_mask() -> Option<cpu_set_t> {
@@ -130,8 +156,7 @@ mod linux {
 
         if result == 0 {
             Some(set)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -149,8 +174,8 @@ mod linux {
         #[test]
         fn test_linux_get_affinity_mask() {
             match get_affinity_mask() {
-                Some(_) => {},
-                None => { assert!(false); },
+                Some(_) => {}
+                None => { assert!(false); }
             }
         }
 
@@ -159,8 +184,8 @@ mod linux {
             match get_core_ids() {
                 Some(set) => {
                     assert_eq!(set.len(), num_cpus::get());
-                },
-                None => { assert!(false); },
+                }
+                None => { assert!(false); }
             }
         }
 
@@ -197,7 +222,7 @@ mod linux {
 
             assert!(is_equal);
         }
-     }
+    }
 }
 
 // Windows Section
@@ -213,6 +238,7 @@ fn get_core_ids_helper() -> Option<Vec<CoreId>> {
 fn set_for_current_helper(core_id: CoreId) -> bool {
     windows::set_for_current(core_id)
 }
+
 
 #[cfg(target_os = "windows")]
 extern crate winapi;
@@ -239,8 +265,7 @@ mod windows {
             }
 
             Some(core_ids)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -253,7 +278,7 @@ mod windows {
         let res = unsafe {
             SetThreadAffinityMask(
                 GetCurrentThread(),
-                mask as DWORD_PTR
+                mask as DWORD_PTR,
             )
         };
         res != 0
@@ -267,7 +292,7 @@ mod windows {
             GetProcessAffinityMask(
                 GetCurrentProcess(),
                 &mut process_mask as PDWORD_PTR,
-                &mut system_mask as PDWORD_PTR
+                &mut system_mask as PDWORD_PTR,
             )
         };
 
@@ -292,8 +317,8 @@ mod windows {
             match get_core_ids() {
                 Some(set) => {
                     assert_eq!(set.len(), num_cpus::get());
-                },
-                None => { assert!(false); },
+                }
+                None => { assert!(false); }
             }
         }
 
@@ -359,14 +384,14 @@ mod macos {
 
     pub fn get_core_ids() -> Option<Vec<CoreId>> {
         Some((0..(num_cpus::get())).into_iter()
-             .map(|n| CoreId { id: n as usize })
-             .collect::<Vec<_>>())
+            .map(|n| CoreId { id: n as usize })
+            .collect::<Vec<_>>())
     }
 
     pub fn set_for_current(core_id: CoreId) -> bool {
         let THREAD_AFFINITY_POLICY_COUNT: mach_msg_type_number_t =
             mem::size_of::<thread_affinity_policy_data_t>() as mach_msg_type_number_t /
-            mem::size_of::<integer_t>() as mach_msg_type_number_t;
+                mem::size_of::<integer_t>() as mach_msg_type_number_t;
 
         let mut info = thread_affinity_policy_data_t {
             affinity_tag: core_id.id as integer_t,
@@ -377,7 +402,7 @@ mod macos {
                 pthread_self() as thread_t,
                 THREAD_AFFINITY_POLICY,
                 &mut info as thread_policy_t,
-                THREAD_AFFINITY_POLICY_COUNT
+                THREAD_AFFINITY_POLICY_COUNT,
             )
         };
         res == 0
@@ -394,8 +419,8 @@ mod macos {
             match get_core_ids() {
                 Some(set) => {
                     assert_eq!(set.len(), num_cpus::get());
-                },
-                None => { assert!(false); },
+                }
+                None => { assert!(false); }
             }
         }
 
@@ -424,8 +449,15 @@ fn set_for_current_helper(core_id: CoreId) -> bool {
 }
 
 #[cfg(target_os = "freebsd")]
+#[inline]
+fn set_mask_for_current_helper(core_ids: &[CoreId]) -> bool {
+    freebsd::set_mask_for_current(core_ids)
+}
+
+
+#[cfg(target_os = "freebsd")]
 mod freebsd {
-    use std::mem;
+    use std::{mem, slice};
 
     use libc::{
         cpuset_getaffinity, cpuset_setaffinity, cpuset_t, CPU_ISSET,
@@ -450,12 +482,12 @@ mod freebsd {
         }
     }
 
-    pub fn set_for_current(core_id: CoreId) -> bool {
-        // Turn `core_id` into a `libc::cpuset_t` with only
-        // one core active.
+    pub fn set_mask_for_current(core_ids: &CoreId) -> bool {
         let mut set = new_cpu_set();
 
-        unsafe { CPU_SET(core_id.id, &mut set) };
+        for id in core_ids {
+            unsafe { CPU_SET(id.id, &mut set) };
+        }
 
         // Set the current thread's core affinity.
         let res = unsafe {
@@ -470,6 +502,10 @@ mod freebsd {
             )
         };
         res == 0
+    }
+
+    pub fn set_for_current(core_id: CoreId) -> bool {
+        set_mask_for_current(slice::from_ref(&core_id))
     }
 
     fn get_affinity_mask() -> Option<cpuset_t> {
@@ -562,11 +598,11 @@ mod freebsd {
 // Stub Section
 
 #[cfg(not(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "freebsd"
+target_os = "linux",
+target_os = "android",
+target_os = "windows",
+target_os = "macos",
+target_os = "freebsd"
 )))]
 #[inline]
 fn get_core_ids_helper() -> Option<Vec<CoreId>> {
@@ -574,14 +610,24 @@ fn get_core_ids_helper() -> Option<Vec<CoreId>> {
 }
 
 #[cfg(not(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "freebsd"
+target_os = "linux",
+target_os = "android",
+target_os = "windows",
+target_os = "macos",
+target_os = "freebsd"
 )))]
 #[inline]
 fn set_for_current_helper(_core_id: CoreId) -> bool {
+    false
+}
+
+#[cfg(not(any(
+target_os = "linux",
+target_os = "android",
+target_os = "freebsd"
+)))]
+#[inline]
+fn set_mask_for_current_helper(_core_ids: &[CoreId]) -> bool {
     false
 }
 
@@ -602,8 +648,8 @@ mod tests {
         match get_core_ids() {
             Some(set) => {
                 assert_eq!(set.len(), num_cpus::get());
-            },
-            None => { assert!(false); },
+            }
+            None => { assert!(false); }
         }
     }
 
