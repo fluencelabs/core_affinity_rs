@@ -17,7 +17,7 @@ jobs:
           - macos-latest
           - ubuntu-latest
 
-    name: "cargo build"
+    name: "cargo nextest"
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -27,5 +27,8 @@ jobs:
       - name: Setup Rust toolchain
         uses: dsherret/rust-toolchain-file@v1
 
-      - name: Run cargo build
-        run: cargo build
+      - name: Setup nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Run cargo nextest
+        run: cargo nextest run
