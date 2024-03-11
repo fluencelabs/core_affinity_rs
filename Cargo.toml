@@ -1,5 +1,5 @@
 [package]
-name = "core_affinity"
+name = "ccp_core_affinity"
 version = "0.8.1"
 authors = ["Philip Woods <elzairthesorcerer@gmail.com>"]
 description = "Manages CPU affinities"
